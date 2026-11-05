@@ -74,3 +74,40 @@ test('utilidades de presentación', () => {
   assert.equal(esc('<a "x">'), '&lt;a &quot;x&quot;&gt;');
   assert.ok(!cardHTML({ ...normalizeFeature(f()), barrio: '<script>' }).includes('<script>'));
 });
+
+test('consulta balanceada: pide arriendo y venta por separado', async () => {
+  const { fetchBalancedFeatures } = await import('../src/oime.mjs');
+  const wheres = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const where = new URL(url).searchParams.get('where');
+    wheres.push(where);
+    const n = /ARRIEND/.test(where) ? 3 : 5;
+    const features = Array.from({ length: n }, (_, i) => ({ attributes: { objectid: i } }));
+    return { ok: true, json: async () => ({ features }) };
+  };
+  try {
+    const out = await fetchBalancedFeatures({ where: '1=1', maxRecords: 10, pageSize: 2000, timeoutMs: 1000, retries: 1 });
+    assert.equal(out.length, 8);
+    assert.match(wheres[0], /ARRIEND/);
+    assert.match(wheres[1], /VENT/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('consulta balanceada: si el servidor rechaza el filtro, usa la consulta simple', async () => {
+  const { fetchBalancedFeatures } = await import('../src/oime.mjs');
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const where = new URL(url).searchParams.get('where');
+    if (/LIKE/.test(where)) return { ok: true, json: async () => ({ error: { code: 400, message: 'Invalid query' } }) };
+    return { ok: true, json: async () => ({ features: [{ attributes: { objectid: 1 } }] }) };
+  };
+  try {
+    const out = await fetchBalancedFeatures({ where: '1=1', maxRecords: 10, pageSize: 2000, timeoutMs: 1000, retries: 1 });
+    assert.equal(out.length, 1);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

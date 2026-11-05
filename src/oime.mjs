@@ -96,6 +96,45 @@ export async function fetchRawFeatures(opts = defaultOptions()) {
   return features;
 }
 
+// Cláusulas por operación. Se buscan en los dos campos porque cada portal
+// llena uno u otro, y con LIKE para tolerar variaciones de escritura.
+const OP_CLAUSES = {
+  Arriendo:
+    "(UPPER(tipo_comercio) LIKE '%ARRIEND%' OR UPPER(commercial_type) LIKE '%ARRIEND%' OR UPPER(tipo_comercio) LIKE '%ALQUIL%' OR UPPER(commercial_type) LIKE '%RENT%' OR UPPER(commercial_type) LIKE '%LEASE%')",
+  Venta:
+    "(UPPER(tipo_comercio) LIKE '%VENT%' OR UPPER(commercial_type) LIKE '%VENT%' OR UPPER(commercial_type) LIKE '%SALE%' OR UPPER(commercial_type) LIKE '%SELL%')",
+};
+
+/**
+ * Pide arriendos y ventas por separado para que una operación no deje por
+ * fuera a la otra: si las 4.000 ofertas más recientes fueran todas de venta,
+ * un solo query no traería ningún arriendo. Arriendo recibe hasta la mitad
+ * del cupo y venta usa el resto. Si el servidor rechaza la consulta por
+ * operación, se vuelve a la consulta simple.
+ */
+export async function fetchBalancedFeatures(opts = defaultOptions()) {
+  try {
+    console.log('  · arriendos');
+    const arriendo = await fetchRawFeatures({
+      ...opts,
+      where: `(${opts.where}) AND ${OP_CLAUSES.Arriendo}`,
+      maxRecords: Math.floor(opts.maxRecords / 2),
+    });
+    console.log('  · ventas');
+    const venta = await fetchRawFeatures({
+      ...opts,
+      where: `(${opts.where}) AND ${OP_CLAUSES.Venta}`,
+      maxRecords: opts.maxRecords - arriendo.length,
+    });
+    console.log(`  → ${arriendo.length} arriendos y ${venta.length} ventas`);
+    if (arriendo.length + venta.length > 0) return [...venta, ...arriendo];
+    console.warn('  la consulta por operación no trajo nada; uso la consulta simple');
+  } catch (err) {
+    console.warn(`  la consulta por operación falló (${err.message}); uso la consulta simple`);
+  }
+  return fetchRawFeatures(opts);
+}
+
 export async function readSnapshot(path) {
   const json = JSON.parse(await readFile(path, 'utf8'));
   return Array.isArray(json) ? json : json.features;

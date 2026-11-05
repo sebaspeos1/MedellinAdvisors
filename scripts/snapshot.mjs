@@ -2,9 +2,9 @@
 // Se usa SOLO si la API falla durante un build. La genera la API (local o
 // GitHub Actions), nunca se edita a mano.
 import { writeFile, mkdir } from 'node:fs/promises';
-import { fetchRawFeatures, defaultOptions } from '../src/oime.mjs';
+import { fetchBalancedFeatures, defaultOptions } from '../src/oime.mjs';
 
-const features = await fetchRawFeatures(defaultOptions());
+const features = await fetchBalancedFeatures(defaultOptions());
 if (!features.length) {
   console.error('La API respondió sin registros; no se sobrescribe la copia.');
   process.exit(1);

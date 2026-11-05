@@ -71,18 +71,24 @@ export function homePage(ctx, ofertas, stats) {
   const initial = ofertas.slice(0, ctx.pageSize);
   const tipos = stats.tipos.map((t) => t.nombre);
   const comunas = [...stats.comunas].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  // Si la API solo trae una operación, no mostramos controles vacíos.
+  const ambas = stats.venta > 0 && stats.arriendo > 0;
   const opt = (v, label = v) => `<option value="${esc(v)}">${esc(label)}</option>`;
 
   const body = `
 <section class="hero wrap" aria-labelledby="h1">
   <p class="eyebrow">Datos abiertos · Alcaldía de Medellín</p>
   <h1 id="h1">¿Cuánto cuesta vivir en cada barrio de Medellín?</h1>
-  <p class="lede">${entero(stats.total)} ofertas de vivienda en venta y arriendo recopiladas por el Observatorio Inmobiliario de la ciudad. Filtra por comuna, estrato, precio y tamaño, y compara cada inmueble con lo que se pide en su zona.</p>
-  <ul class="kpis">
+  <p class="lede">${entero(stats.total)} ofertas de vivienda ${ambas ? 'en venta y arriendo' : stats.venta ? 'en venta' : 'en arriendo'} recopiladas por el Observatorio Inmobiliario de la ciudad. Filtra por comuna, estrato, precio y tamaño, y compara cada inmueble con lo que se pide en su zona.</p>
+  <ul class="kpis">${ambas ? `
     <li><strong>${entero(stats.venta)}</strong><span>en venta</span></li>
     <li><strong>${entero(stats.arriendo)}</strong><span>en arriendo</span></li>
     <li><strong>${precioCorto(stats.m2Venta)}</strong><span>mediana por m² (venta)</span></li>
-    <li><strong>${precioCorto(stats.medianaArriendo)}</strong><span>arriendo mediano al mes</span></li>
+    <li><strong>${precioCorto(stats.medianaArriendo)}</strong><span>arriendo mediano al mes</span></li>` : `
+    <li><strong>${entero(stats.total)}</strong><span>ofertas en ${stats.venta ? 'venta' : 'arriendo'}</span></li>
+    <li><strong>${precioCorto(stats.venta ? stats.medianaVenta : stats.medianaArriendo)}</strong><span>precio mediano</span></li>
+    <li><strong>${precioCorto(stats.venta ? stats.m2Venta : stats.m2Arriendo)}</strong><span>mediana por m²</span></li>
+    <li><strong>${entero(stats.comunas.length)}</strong><span>comunas y corregimientos</span></li>`}
   </ul>
 </section>
 
@@ -94,14 +100,14 @@ export function homePage(ctx, ofertas, stats) {
         <label for="q">Barrio o comuna</label>
         <input type="search" id="q" name="q" placeholder="Ej: Laureles, Belén, El Poblado" autocomplete="off" enterkeyhint="search">
       </div>
-      <fieldset class="field full">
+      ${ambas ? `<fieldset class="field full">
         <legend>Operación</legend>
         <div class="seg">
           <label><input type="radio" name="op" value="" checked>Todas</label>
           <label><input type="radio" name="op" value="Venta">Venta</label>
           <label><input type="radio" name="op" value="Arriendo">Arriendo</label>
         </div>
-      </fieldset>
+      </fieldset>` : ''}
       <button type="button" class="btn more-filters full" id="mas-filtros" aria-expanded="false" aria-controls="extra">Más filtros</button>
       <div class="extra" id="extra">
       <div class="field">

@@ -4,7 +4,7 @@
 import { mkdir, writeFile, readFile, readdir, cp, rm, access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchRawFeatures, readSnapshot, normalizeAll, defaultOptions } from '../src/oime.mjs';
+import { fetchBalancedFeatures, readSnapshot, normalizeAll, defaultOptions } from '../src/oime.mjs';
 import { computeStats } from '../src/stats.mjs';
 import { toCompact, COMPACT_FIELDS } from '../public/assets/shared.js';
 import * as pages from '../src/pages.mjs';
@@ -30,7 +30,7 @@ async function getFeatures() {
     try {
       console.log('→ Consultando la API del OIME…');
       const t0 = Date.now();
-      const features = await fetchRawFeatures(defaultOptions());
+      const features = await fetchBalancedFeatures(defaultOptions());
       if (!features.length) throw new Error('la API respondió sin registros');
       console.log(`✓ ${features.length} registros en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
       return { features, fromSnapshot: false };
@@ -66,14 +66,18 @@ function similares(o, ofertas) {
 async function main() {
   const t0 = Date.now();
   const { features, fromSnapshot } = await getFeatures();
-  const ofertas = normalizeAll(features);
+  // Más recientes primero, mezclando venta y arriendo.
+  const ofertas = normalizeAll(features).sort(
+    (a, b) => (b.actualizado || '').localeCompare(a.actualizado || '') || b.id - a.id,
+  );
   if (!ofertas.length) throw new Error('Ningún registro válido tras normalizar.');
   const stats = computeStats(ofertas);
   console.log(`✓ ${ofertas.length} ofertas válidas (${stats.venta} venta, ${stats.arriendo} arriendo), ${stats.comunas.length} comunas`);
 
   const ctx = {
     siteUrl: siteUrl(),
-    builtAt: new Date().toISOString().slice(0, 10),
+    // Fecha en hora de Colombia (Vercel construye en UTC).
+    builtAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
     version: Date.now().toString(36),
     css: minifyCss(await readFile(join(ROOT, 'public/assets/styles.css'), 'utf8')),
     pageSize: 24,
